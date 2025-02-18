@@ -305,7 +305,7 @@ pub(crate) fn classify_grpc_metadata(
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum ParsedGrpcStatus {
     Success,
-    NonSuccess(NonZeroI32, String),
+    NonSuccess(NonZeroI32, Option<String>),
     GrpcStatusHeaderMissing,
     // these two are treated as `Success` but kept separate for clarity
     HeaderNotString,

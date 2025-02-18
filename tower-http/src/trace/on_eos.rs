@@ -97,7 +97,7 @@ impl OnEos for DefaultOnEos {
                 ParsedGrpcStatus::Success
                 | ParsedGrpcStatus::HeaderNotString
                 | ParsedGrpcStatus::HeaderNotInt => Some(0),
-                ParsedGrpcStatus::NonSuccess(status) => Some(status.get()),
+                ParsedGrpcStatus::NonSuccess(status, _) => Some(status.get()),
                 ParsedGrpcStatus::GrpcStatusHeaderMissing => None,
             }
         });
