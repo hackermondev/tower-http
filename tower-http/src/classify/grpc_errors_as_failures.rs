@@ -194,8 +194,12 @@ impl ClassifyResponse for GrpcErrorsAsFailures {
             ParsedGrpcStatus::Success
             | ParsedGrpcStatus::HeaderNotString
             | ParsedGrpcStatus::HeaderNotInt => ClassifiedResponse::Ready(Ok(())),
-            ParsedGrpcStatus::NonSuccess(status) => {
-                ClassifiedResponse::Ready(Err(GrpcFailureClass::Code(status)))
+            ParsedGrpcStatus::NonSuccess(status, message) => {
+                if let Some(message) = message {
+                    ClassifiedResponse::Ready(Err(GrpcFailureClass::Error(message)))
+                } else {
+                    ClassifiedResponse::Ready(Err(GrpcFailureClass::Code(status)))
+                }
             }
             ParsedGrpcStatus::GrpcStatusHeaderMissing => {
                 ClassifiedResponse::RequiresEos(GrpcEosErrorsAsFailures {
@@ -229,7 +233,13 @@ impl ClassifyEos for GrpcEosErrorsAsFailures {
                 | ParsedGrpcStatus::GrpcStatusHeaderMissing
                 | ParsedGrpcStatus::HeaderNotString
                 | ParsedGrpcStatus::HeaderNotInt => Ok(()),
-                ParsedGrpcStatus::NonSuccess(status) => Err(GrpcFailureClass::Code(status)),
+                ParsedGrpcStatus::NonSuccess(status, message) => {
+                    if let Some(message) = message {
+                        Err(GrpcFailureClass::Error(message))
+                    } else {
+                        Err(GrpcFailureClass::Code(status))
+                    }
+                },
             }
         } else {
             Ok(())
@@ -286,14 +296,16 @@ pub(crate) fn classify_grpc_metadata(
     {
         ParsedGrpcStatus::Success
     } else {
-        ParsedGrpcStatus::NonSuccess(NonZeroI32::new(status).unwrap())
+        let status_message = headers.get("grpc-message").map(|message| message.to_str().unwrap_or_default());
+        let status_message = status_message.map(|message| message.to_string());
+        ParsedGrpcStatus::NonSuccess(NonZeroI32::new(status).unwrap(), status_message)
     }
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum ParsedGrpcStatus {
     Success,
-    NonSuccess(NonZeroI32),
+    NonSuccess(NonZeroI32, String),
     GrpcStatusHeaderMissing,
     // these two are treated as `Success` but kept separate for clarity
     HeaderNotString,
@@ -332,7 +344,7 @@ mod tests {
         name: basic_error,
         status: "1",
         success_flags: GrpcCodeBitmask::OK,
-        expected: ParsedGrpcStatus::NonSuccess(NonZeroI32::new(1).unwrap()),
+        expected: ParsedGrpcStatus::NonSuccess(NonZeroI32::new(1).unwrap(), None),
     }
 
     classify_grpc_metadata_test! {
@@ -353,6 +365,6 @@ mod tests {
         name: two_success_codes_none_matches,
         status: "16",
         success_flags: GrpcCodeBitmask::OK | GrpcCodeBitmask::INVALID_ARGUMENT,
-        expected: ParsedGrpcStatus::NonSuccess(NonZeroI32::new(16).unwrap()),
+        expected: ParsedGrpcStatus::NonSuccess(NonZeroI32::new(16).unwrap(), None),
     }
 }
